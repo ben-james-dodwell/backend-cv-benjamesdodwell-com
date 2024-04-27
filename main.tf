@@ -131,8 +131,6 @@ resource "aws_apigatewayv2_api" "lambda_incrementvisits" {
   protocol_type                = "HTTP"
   disable_execute_api_endpoint = true
 
-  #target = aws_lambda_function.IncrementVisits.arn
-
   cors_configuration {
     allow_origins = ["https://cv.benjamesdodwell.com"]
     allow_methods = ["GET"]
