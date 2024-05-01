@@ -51,7 +51,7 @@ resource "aws_iam_role" "LambdaAssumeRole" {
 
 data "archive_file" "lambda_incrementvisits_payload" {
   type        = "zip"
-  source_file = "${path.module}/../lambda/IncrementVisits/src/IncrementVisits.py"
+  source_file = "${path.module}/../lambda/IncrementVisits/IncrementVisits.py"
   output_path = "${path.module}/../lambda/IncrementVisits/IncrementVisits_payload.zip"
 }
 

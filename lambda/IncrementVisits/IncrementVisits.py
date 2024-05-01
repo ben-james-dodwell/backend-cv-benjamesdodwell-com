@@ -6,6 +6,7 @@ table = boto3.resource('dynamodb').Table('Visits')
 
 
 def lambda_handler(event, context):
+
     try:
         # Attempt to update the item
         table.update_item(
@@ -36,7 +37,9 @@ def lambda_handler(event, context):
 
     except ClientError as e:
         # If an error occurs, return an error response
-        error_message = f"An error occurred: {e.response['Error']['Message']}"
+        error_message = f"An error occurred: {
+            e.response['Error']['Message']
+        }"
         return {
             'statusCode': 500,
             'headers': {
