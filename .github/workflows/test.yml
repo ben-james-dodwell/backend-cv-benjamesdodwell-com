@@ -1,0 +1,30 @@
+name: 'Test'
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [ "master" ]
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  terraform:
+    name: 'Test'
+    runs-on: ubuntu-latest
+    environment: production
+    defaults:
+      run:
+        shell: bash
+
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          architecture: 'x64'
+
+      - name: Display Python version
+        run: python -c "import sys; print(sys.version)"
