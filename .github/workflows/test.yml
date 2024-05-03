@@ -35,3 +35,7 @@ jobs:
       - name: Test with unittest
         working-directory: ./lambda/IncrementVisits
         run: python -m unittest ./test_IncrementVisits.py
+        env:
+          AWS_ACCESS_KEY_ID: dummy-access-key
+          AWS_SECRET_ACCESS_KEY: dummy-access-key-secret
+          AWS_DEFAULT_REGION: eu-west-2
