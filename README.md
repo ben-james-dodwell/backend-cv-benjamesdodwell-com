@@ -1,6 +1,6 @@
 # Backend Infrastructure as Code (IaC)
 
-To provision and configure backend infrastructure used by https://cv.benjamesdodwell.com
+Provision and configure backend infrastructure used by https://cv.benjamesdodwell.com
 
 ## Requirements
 
