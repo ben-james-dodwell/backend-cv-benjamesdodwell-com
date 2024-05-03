@@ -32,8 +32,6 @@ jobs:
       - name: Install dependencies
         run: python -m pip install --upgrade pip boto3 botocore moto
 
-      - name: Test with pytest
+      - name: Test with unittest
         working-directory: ./lambda/IncrementVisits
-        run: |
-          pip install pytest pytest-cov
-          pytest ./test_IncrementVisits.py
+        run: pytest -m unittest ./test_IncrementVisits.py
