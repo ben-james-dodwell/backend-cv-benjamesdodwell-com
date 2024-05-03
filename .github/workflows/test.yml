@@ -34,4 +34,4 @@ jobs:
 
       - name: Test with unittest
         working-directory: ./lambda/IncrementVisits
-        run: pytest -m unittest ./test_IncrementVisits.py
+        run: python -m unittest ./test_IncrementVisits.py
