@@ -9,7 +9,7 @@ class Test_IncrementVisits(unittest.TestCase):
 
     @mock_aws
     def test_lambda_handler_success(self):
-        boto3.client('dynamodb').create_table(
+        boto3.client('dynamodb', region_name='eu-west-2').create_table(
             AttributeDefinitions=[
                 {
                     'AttributeName': 'Id',

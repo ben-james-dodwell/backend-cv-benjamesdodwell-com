@@ -2,7 +2,7 @@ import boto3
 import simplejson as json
 from botocore.exceptions import ClientError
 
-table = boto3.resource('dynamodb').Table('Visits')
+table = boto3.resource('dynamodb', region_name='eu-west-2').Table('Visits')
 
 
 def lambda_handler(event, context):
