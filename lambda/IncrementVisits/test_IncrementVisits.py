@@ -54,4 +54,4 @@ class Test_IncrementVisits(unittest.TestCase):
 
         self.assertEqual(response['statusCode'], 500)
         self.assertIn('error', response['body'])
-        self.assertEqual(0)
+        self.assertEqual(0, 1)
