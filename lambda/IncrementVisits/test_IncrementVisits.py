@@ -50,7 +50,6 @@ class Test_IncrementVisits(unittest.TestCase):
 
         # Invoke lambda_handler without DynamoDB Table
         response = lambda_handler(event, context)
-        print(response)
 
         self.assertEqual(response['statusCode'], 500)
         self.assertIn('error', response['body'])
