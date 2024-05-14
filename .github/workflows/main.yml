@@ -37,7 +37,7 @@ jobs:
 
     - name: Terraform Init
       working-directory: ./terraform
-      run: terraform init -input=false
+      run: terraform init -input=false -backend-config="bucket=${{ secrets.BACKEND_BUCKET }}" -backend-config="key=${{ secrets.BACKEND_KEY }}" -backend-config="region=${{ secrets.BACKEND_REGION }}" -backend-config="dynamodb_table=${{ secrets.BACKEND_DYNAMODB_TABLE }}"
 
     - name: Terraform Plan
       working-directory: ./terraform

@@ -14,11 +14,12 @@ Configure an AWS IAM account with appropriate permissions and an access key to b
 https://registry.terraform.io/providers/hashicorp/aws/latest/docs#authentication-and-configuration
 
 Configure AWS CLI with the access key:
-```
+```sh
 aws cli configure
 ```
 
 Run the Terraform module:
-```
+```sh
+terraform init -backend-config="backend.tfvars"
 terraform apply
 ```
