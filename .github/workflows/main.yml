@@ -41,7 +41,7 @@ jobs:
 
     - name: Terraform Plan
       working-directory: ./terraform
-      run: terraform plan -out=tfplan -input=false
+      run: terraform plan -out=tfplan -input=false -var="AWS_ACCOUNT=${{ secrets.AWS_ACCOUNT }}" -var="CODE_SIGNING_BUCKET=${{ secrets.CODE_SIGNING_BUCKET }}"
 
     - name: Terraform Apply
       working-directory: ./terraform

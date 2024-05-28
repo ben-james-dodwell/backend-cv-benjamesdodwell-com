@@ -1,3 +1,56 @@
+resource "aws_kms_key" "backend_cv" {
+  description             = "backend_cv"
+  deletion_window_in_days = 7
+  enable_key_rotation     = true
+
+  policy = <<POLICY
+  {
+    "Version": "2012-10-17",
+    "Id": "default",
+    "Statement": [
+      {
+        "Effect": "Allow",
+        "Principal": {
+          "AWS": "arn:aws:iam::${var.aws_account}:root"
+        },
+        "Action": "kms:*",
+        "Resource": "*"
+      },
+      {
+        "Effect": "Allow",
+        "Principal": {
+          "AWS": "arn:aws:iam::${var.aws_account}:user/terraform"
+        },
+        "Action": "kms:*",
+        "Resource": "*"
+      },
+      {
+        "Effect": "Allow",
+        "Principal": {
+          "AWS": "arn:aws:iam::${var.aws_account}:role/GitHubActionsTerraformRole" 
+        },
+        "Action": "kms:*",
+        "Resource": "*"
+      },
+      {
+        "Effect": "Allow",
+        "Principal": {
+          "Service": "logs.${var.region}.amazonaws.com" 
+        },
+        "Action": [
+            "kms:Encrypt*",
+            "kms:Decrypt*",
+            "kms:ReEncrypt*",
+            "kms:GenerateDataKey*",
+            "kms:Describe*"
+        ],
+        "Resource": "*"
+      }     
+    ]
+  }
+POLICY
+}
+
 # Create DynamoDB table Visits
 resource "aws_dynamodb_table" "visits" {
   name         = "Visits"
@@ -7,6 +60,15 @@ resource "aws_dynamodb_table" "visits" {
   attribute {
     name = "Id"
     type = "S"
+  }
+
+  point_in_time_recovery {
+    enabled = true
+  }
+
+  server_side_encryption {
+    enabled     = true
+    kms_key_arn = aws_kms_key.backend_cv.arn
   }
 }
 
@@ -36,6 +98,18 @@ data "aws_iam_policy_document" "visits_policy" {
       "${aws_dynamodb_table.visits.arn}"
     ]
   }
+
+  statement {
+    effect = "Allow"
+
+    actions = [
+      "kms:Decrypt"
+    ]
+
+    resources = [
+      "${aws_kms_key.backend_cv.arn}"
+    ]
+  }
 }
 
 # Create IAM role for Lambda
@@ -55,22 +129,139 @@ data "archive_file" "lambda_incrementvisits_payload" {
   output_path = "${path.module}/../lambda/IncrementVisits/IncrementVisits_payload.zip"
 }
 
+resource "aws_s3_bucket" "code_signing" {
+  #checkov:skip=CKV_AWS_144:Cross-region replication not required for code-signing bucket.
+  #checkov:skip=CKV_AWS_18:Access logging not required for code-signing bucket.
+  #checkov:skip=CKV2_AWS_62:Event notifications not required for code-signing bucket.
+  #checkov:skip=CKV2_AWS_61:Lifecycle configuration not required for code-signing bucket.
+  bucket = var.code_signing_bucket
+
+  force_destroy = true
+}
+
+resource "aws_s3_bucket_public_access_block" "code_signing" {
+  bucket                  = aws_s3_bucket.code_signing.id
+  block_public_acls       = true
+  block_public_policy     = true
+  ignore_public_acls      = true
+  restrict_public_buckets = true
+}
+
+resource "aws_s3_bucket_versioning" "code_signing_versioning" {
+  bucket = aws_s3_bucket.code_signing.id
+  versioning_configuration {
+    status = "Enabled"
+  }
+}
+
+resource "aws_s3_bucket_object_lock_configuration" "code_signing_object_lock" {
+  bucket = aws_s3_bucket.code_signing.id
+
+  rule {
+    default_retention {
+      mode = "COMPLIANCE"
+      days = 5
+    }
+  }
+
+  depends_on = [
+    aws_s3_bucket_versioning.code_signing_versioning
+  ]
+}
+
+resource "aws_s3_bucket_server_side_encryption_configuration" "code_signing_encryption" {
+  bucket = aws_s3_bucket.code_signing.id
+
+  rule {
+    apply_server_side_encryption_by_default {
+      kms_master_key_id = aws_kms_key.backend_cv.arn
+      sse_algorithm     = "aws:kms"
+    }
+  }
+}
+
+resource "aws_s3_object" "lambda_incrementvisits_payload" {
+  bucket = aws_s3_bucket.code_signing.id
+  key    = "unsigned/IncrementVisits_payload.zip"
+  source = data.archive_file.lambda_incrementvisits_payload.output_path
+}
+
+resource "aws_signer_signing_profile" "code_signing" {
+  platform_id = "AWSLambda-SHA384-ECDSA"
+}
+
+resource "aws_signer_signing_job" "code_signing" {
+  profile_name = aws_signer_signing_profile.code_signing.name
+
+  source {
+    s3 {
+      bucket  = aws_s3_bucket.code_signing.id
+      key     = aws_s3_object.lambda_incrementvisits_payload.id
+      version = aws_s3_object.lambda_incrementvisits_payload.version_id
+    }
+  }
+
+  destination {
+    s3 {
+      bucket = aws_s3_bucket.code_signing.id
+      prefix = "signed/"
+    }
+  }
+
+  ignore_signing_job_failure = true
+}
+
+locals {
+  signed_bucket = aws_signer_signing_job.code_signing.signed_object[0]["s3"][0]["bucket"]
+  signed_key    = aws_signer_signing_job.code_signing.signed_object[0]["s3"][0]["key"]
+}
+
+data "aws_s3_object" "signed_object" {
+  bucket = local.signed_bucket
+  key    = local.signed_key
+}
+
+resource "aws_lambda_code_signing_config" "code_signing" {
+  allowed_publishers {
+    signing_profile_version_arns = [aws_signer_signing_profile.code_signing.version_arn]
+  }
+
+  policies {
+    untrusted_artifact_on_deployment = "Enforce"
+  }
+}
+
 # Create Lambda function from Python archive
 resource "aws_lambda_function" "IncrementVisits" {
-  filename      = "${path.module}/../lambda/IncrementVisits/IncrementVisits_payload.zip"
+  #checkov:skip=CKV_AWS_117:Lambda requires no access to VPC resources.
+  #checkov:skip=CKV_AWS_116:Dead Letter Queue (DLQ) not required for this Lambda function.
+  s3_bucket         = local.signed_bucket
+  s3_key            = local.signed_key
+  s3_object_version = data.aws_s3_object.signed_object.version_id
+
   function_name = "IncrementVisits"
   role          = aws_iam_role.LambdaAssumeRole.arn
   handler       = "IncrementVisits.lambda_handler"
 
-  source_code_hash = data.archive_file.lambda_incrementvisits_payload.output_base64sha256
+  reserved_concurrent_executions = -1
 
   runtime = "python3.12"
+
+  code_signing_config_arn = aws_lambda_code_signing_config.code_signing.arn
+
+  tracing_config {
+    mode = "Active"
+  }
 }
 
 # Request certificate from ACM to be used as Custom Domain with API Gateway
 resource "aws_acm_certificate" "api_request" {
   domain_name       = "api.cv.benjamesdodwell.com"
   validation_method = "DNS"
+
+  lifecycle {
+    create_before_destroy = true
+  }
 }
 
 data "aws_route53_zone" "cv_benjamesdodwell_com" {
@@ -146,11 +337,22 @@ resource "aws_lambda_permission" "apigw" {
   source_arn = "${aws_apigatewayv2_api.lambda_incrementvisits.execution_arn}/*/*"
 }
 
+resource "aws_cloudwatch_log_group" "api_cv_benjamesdodwell_com" {
+  name              = "api_cv_benjamesdodwell_com"
+  kms_key_id        = aws_kms_key.backend_cv.arn
+  retention_in_days = 365
+}
+
 # Create API Gateway (HTTP) Stage
 resource "aws_apigatewayv2_stage" "prod" {
   api_id      = aws_apigatewayv2_api.lambda_incrementvisits.id
   name        = "prod"
   auto_deploy = true
+
+  access_log_settings {
+    destination_arn = aws_cloudwatch_log_group.api_cv_benjamesdodwell_com.arn
+    format          = "$context.identity.sourceIp,$context.identity.caller,$context.identity.user,$context.requestTime,$context.httpMethod,$context.resourcePath,$context.protocol,$context.status,$context.responseLength,$context.requestId,$context.extendedRequestId"
+  }
 }
 
 # Create API Gateway (HTTP) mapping to Custom Domain
@@ -171,6 +373,7 @@ resource "aws_apigatewayv2_integration" "api_IncrementVisits" {
 
 # Create API Gateway route
 resource "aws_apigatewayv2_route" "api-route" {
+  #checkov:skip=CKV_AWS_309:Authorisation not required for route.
   api_id = aws_apigatewayv2_api.lambda_incrementvisits.id
 
   route_key = "GET /IncrementVisits"
