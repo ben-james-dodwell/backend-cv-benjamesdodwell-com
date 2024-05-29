@@ -1,3 +1,4 @@
+# Create Key Management Service Customer Managed Key for encryption of backend resources
 resource "aws_kms_key" "backend_cv" {
   description             = "backend_cv"
   deletion_window_in_days = 7
@@ -129,6 +130,7 @@ data "archive_file" "lambda_incrementvisits_payload" {
   output_path = "${path.module}/../lambda/IncrementVisits/IncrementVisits_payload.zip"
 }
 
+# Create S3 bucket for Lambda code-signing
 resource "aws_s3_bucket" "code_signing" {
   #checkov:skip=CKV_AWS_144:Cross-region replication not required for code-signing bucket.
   #checkov:skip=CKV_AWS_18:Access logging not required for code-signing bucket.
@@ -180,16 +182,19 @@ resource "aws_s3_bucket_server_side_encryption_configuration" "code_signing_encr
   }
 }
 
+# Upload Lambda payload
 resource "aws_s3_object" "lambda_incrementvisits_payload" {
   bucket = aws_s3_bucket.code_signing.id
   key    = "unsigned/IncrementVisits_payload.zip"
   source = data.archive_file.lambda_incrementvisits_payload.output_path
 }
 
+# Create AWS Signer code-signing profile
 resource "aws_signer_signing_profile" "code_signing" {
   platform_id = "AWSLambda-SHA384-ECDSA"
 }
 
+# Sign Lambda code
 resource "aws_signer_signing_job" "code_signing" {
   profile_name = aws_signer_signing_profile.code_signing.name
 
@@ -221,6 +226,7 @@ data "aws_s3_object" "signed_object" {
   key    = local.signed_key
 }
 
+# Enforce Lambda code-signing
 resource "aws_lambda_code_signing_config" "code_signing" {
   allowed_publishers {
     signing_profile_version_arns = [aws_signer_signing_profile.code_signing.version_arn]
@@ -231,7 +237,7 @@ resource "aws_lambda_code_signing_config" "code_signing" {
   }
 }
 
-# Create Lambda function from Python archive
+# Create Lambda function from signed Python archive
 resource "aws_lambda_function" "IncrementVisits" {
   #checkov:skip=CKV_AWS_117:Lambda requires no access to VPC resources.
   #checkov:skip=CKV_AWS_116:Dead Letter Queue (DLQ) not required for this Lambda function.
