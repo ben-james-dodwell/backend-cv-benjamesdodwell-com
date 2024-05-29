@@ -156,21 +156,6 @@ resource "aws_s3_bucket_versioning" "code_signing_versioning" {
   }
 }
 
-resource "aws_s3_bucket_object_lock_configuration" "code_signing_object_lock" {
-  bucket = aws_s3_bucket.code_signing.id
-
-  rule {
-    default_retention {
-      mode = "COMPLIANCE"
-      days = 5
-    }
-  }
-
-  depends_on = [
-    aws_s3_bucket_versioning.code_signing_versioning
-  ]
-}
-
 resource "aws_s3_bucket_server_side_encryption_configuration" "code_signing_encryption" {
   bucket = aws_s3_bucket.code_signing.id
 
